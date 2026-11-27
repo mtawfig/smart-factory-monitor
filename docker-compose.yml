@@ -47,7 +47,7 @@ services:
   # must never lose data, so no AOF and a small memory cap. noeviction (the
   # default) is deliberate: evicting a dedup key would re-admit a duplicate.
   redis:
-    image: redis:8.10.3-alpine
+    image: redis:8.12.0-alpine
     container_name: sf-redis
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--loglevel", "warning"]
     ports:
