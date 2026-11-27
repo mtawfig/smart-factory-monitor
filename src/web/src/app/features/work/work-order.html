@@ -1,0 +1,220 @@
+<a routerLink="/my-work" class="back">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>{{ 'work.backToList' | transloco }}
+</a>
+
+@if (workOrder.isLoading() || busy()) {
+  <mat-progress-bar mode="indeterminate" />
+}
+
+@if (workOrder.error() && !workOrder.hasValue()) {
+  <p class="error" role="alert" data-testid="wo-error">{{ 'work.notFound' | transloco }}</p>
+} @else if (workOrder.hasValue()) {
+  @let w = workOrder.value();
+  <header class="page-header">
+    <h1>
+      <span class="code">{{ w.assetCode }}</span> {{ w.title }}
+    </h1>
+    <span class="synthetic-tag" data-testid="synthetic-tag">
+      <mat-icon aria-hidden="true">science</mat-icon>{{ 'work.syntheticTag' | transloco }}
+    </span>
+  </header>
+
+  <section class="summary" data-testid="wo-summary">
+    <span class="status" [attr.data-status]="w.status">{{
+      'work.status.' + w.status | transloco
+    }}</span>
+    <span class="priority" [attr.data-priority]="w.priority">{{
+      'work.priority.' + w.priority | transloco
+    }}</span>
+    <span class="muted">{{ 'work.revision' | transloco: { n: w.revision } }}</span>
+    @if (w.statusReason) {
+      <p class="reason">{{ w.statusReason }}</p>
+    }
+    <p class="description">{{ w.description }}</p>
+    <p class="muted">
+      <mat-icon aria-hidden="true" inline>event</mat-icon> {{ w.scheduledFor ?? '—' }}
+      @if (w.dueDate) {
+        · {{ 'work.due' | transloco: { date: w.dueDate } }}
+      }
+    </p>
+  </section>
+
+  @if (message(); as m) {
+    <p class="error" role="alert" data-testid="wo-message">
+      {{ m.key ? (m.key | transloco) : m.text }}
+    </p>
+  }
+
+  @if (actions().length > 0) {
+    <div class="actions" data-testid="wo-actions">
+      @if (holding()) {
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>{{ 'work.holdReason' | transloco }}</mat-label>
+          <input matInput [formControl]="holdReason" data-testid="hold-reason" />
+        </mat-form-field>
+        <button
+          mat-flat-button
+          type="button"
+          [disabled]="holdReason.invalid || busy()"
+          (click)="act('Hold')"
+          data-testid="confirm-hold"
+        >
+          {{ 'work.action.Hold' | transloco }}
+        </button>
+        <button mat-button type="button" (click)="cancelHold()">
+          {{ 'work.cancel' | transloco }}
+        </button>
+      } @else {
+        @for (a of actions(); track a) {
+          @if (a === 'Hold') {
+            <button
+              mat-stroked-button
+              type="button"
+              class="action"
+              [disabled]="busy()"
+              (click)="act(a)"
+              data-testid="action-Hold"
+            >
+              {{ 'work.action.Hold' | transloco }}
+            </button>
+          } @else {
+            <button
+              mat-flat-button
+              type="button"
+              class="action"
+              [disabled]="busy() || (a === 'Complete' && progress().done < progress().total)"
+              (click)="act(a)"
+              [attr.data-testid]="'action-' + a"
+            >
+              {{ 'work.action.' + a | transloco }}
+            </button>
+          }
+        }
+      }
+    </div>
+  }
+
+  <section>
+    <h2>
+      {{ 'work.checklist' | transloco }}
+      <span class="muted">{{ progress().done }}/{{ progress().total }}</span>
+    </h2>
+    <ol class="checklist" data-testid="checklist">
+      @for (item of w.checklist; track item.id) {
+        <li [attr.data-status]="item.status" data-testid="checklist-item">
+          <span class="item-text">{{ item.text }}</span>
+          @if (canRecord()) {
+            <span class="outcomes" role="group" [attr.aria-label]="item.text">
+              @for (o of outcomes; track o) {
+                <button
+                  type="button"
+                  class="outcome"
+                  [class.selected]="item.status === o"
+                  [attr.aria-pressed]="item.status === o"
+                  [disabled]="busy()"
+                  (click)="setItem(item, o)"
+                  [attr.data-testid]="'outcome-' + o"
+                >
+                  {{ 'work.outcome.' + o | transloco }}
+                </button>
+              }
+            </span>
+          } @else {
+            <span class="muted">{{ 'work.outcome.' + item.status | transloco }}</span>
+          }
+        </li>
+      } @empty {
+        <li class="muted">{{ 'work.noChecklist' | transloco }}</li>
+      }
+    </ol>
+  </section>
+
+  <section>
+    <h2>{{ 'work.findings' | transloco }}</h2>
+    @for (f of w.findings; track f.id) {
+      <article class="finding" data-testid="finding">
+        <p>
+          <strong>{{ 'work.condition.' + f.condition | transloco }}</strong>
+          <span class="muted"> · {{ f.technician }}</span>
+        </p>
+        <p>{{ f.notes }}</p>
+        <ul class="attachments">
+          @for (a of f.attachments; track a.id) {
+            <li>
+              <button
+                mat-button
+                type="button"
+                (click)="download(a)"
+                [attr.data-testid]="'attachment-' + a.id"
+              >
+                <mat-icon aria-hidden="true">{{
+                  a.contentType === 'application/pdf' ? 'picture_as_pdf' : 'image'
+                }}</mat-icon>
+                {{ a.fileName }}
+              </button>
+            </li>
+          }
+        </ul>
+        @if (canRecord() && f.attachments.length < 5) {
+          <label class="upload">
+            <mat-icon aria-hidden="true">add_a_photo</mat-icon>{{ 'work.addPhoto' | transloco }}
+            <!-- Why capture: on a phone this opens the camera directly; on desktop it is a normal file picker. -->
+            <input
+              type="file"
+              [accept]="acceptedFiles"
+              capture="environment"
+              (change)="upload(f, $event)"
+              data-testid="file-input"
+            />
+          </label>
+        }
+      </article>
+    } @empty {
+      <p class="muted">{{ 'work.noFindings' | transloco }}</p>
+    }
+
+    @if (canRecord()) {
+      <form
+        class="finding-form"
+        [formGroup]="findingForm"
+        (ngSubmit)="addFinding()"
+        data-testid="finding-form"
+      >
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>{{ 'work.conditionLabel' | transloco }}</mat-label>
+          <mat-select formControlName="condition" data-testid="finding-condition">
+            @for (c of conditions; track c) {
+              <mat-option [value]="c">{{ 'work.condition.' + c | transloco }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>{{ 'work.notes' | transloco }}</mat-label>
+          <textarea
+            matInput
+            formControlName="notes"
+            rows="3"
+            data-testid="finding-notes"
+          ></textarea>
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="busy()" data-testid="add-finding">
+          {{ 'work.addFinding' | transloco }}
+        </button>
+      </form>
+    }
+  </section>
+
+  <section>
+    <h2>{{ 'work.history' | transloco }}</h2>
+    <ol class="history" data-testid="history">
+      @for (h of w.history; track h.revision) {
+        <li>
+          <span class="muted">#{{ h.revision }}</span> {{ h.action }} · {{ h.actor }}
+          @if (h.note) {
+            <span class="muted"> — {{ h.note }}</span>
+          }
+        </li>
+      }
+    </ol>
+  </section>
+}

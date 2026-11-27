@@ -1,0 +1,244 @@
+# SmartFactory AI — continuous integration
+# One workflow, one job per toolchain, all running in parallel. A pull request or a push to main must
+# be green here before anything else happens. Learning note: docs/learning/02-local-platform.md
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Why pull-requests: read — on pull_request events the commit-message check lists the pull request's
+# commits through the GitHub API, which a contents-only token is refused (HTTP 403).
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+
+  # ── Secrets never reach main ──────────────────────────────────────────────
+  secrets-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # Why: scan the whole history that this push/PR adds, not just HEAD.
+      # Why the CLI and not gitleaks/gitleaks-action: the action requires a paid licence whenever the repository
+      # owner is an organisation and calls the GitHub API; the CLI is free, MIT-licensed and needs neither.
+      - name: Install gitleaks (pinned, checksum-verified)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$asset" "$base/$asset"
+          curl -sSfL -o "$RUNNER_TEMP/checksums.txt" "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          (cd "$RUNNER_TEMP" && grep " ${asset}\$" checksums.txt | sha256sum -c -)
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan full git history
+        run: |
+          "$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose --no-banner .
+
+  # ── Commit messages follow Conventional Commits ──────────────────────────
+  commit-messages:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.mjs
+
+  # ── .NET: Platform API, Ingest Worker, BuildingBlocks ─────────────────────
+  dotnet:
+    name: .NET build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore SmartFactory.slnx
+      - name: Build (warnings are errors)
+        run: dotnet build SmartFactory.slnx -c Release --no-restore
+      - name: Test
+        run: dotnet test SmartFactory.slnx -c Release --no-build
+
+  # ── Web: Angular ──────────────────────────────────────────────────────────
+  web:
+    name: Web lint, test and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build -- --configuration production
+
+  # ── Python: ML service and simulator ──────────────────────────────────────
+  python:
+    name: Python ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [ml-service, simulator]
+    defaults:
+      run:
+        working-directory: src/${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/${{ matrix.project }}/uv.lock
+      - run: uv sync --frozen --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+
+  # ── Contracts and configuration are valid ─────────────────────────────────
+  config:
+    name: Compose and plant spec validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: docker compose config
+        run: |
+          sed 's/replace-me-local-only/ci-placeholder/' .env.example > .env
+          docker compose config --quiet
+      - name: plant.yaml parses
+        run: python3 -c "import yaml,sys; yaml.safe_load(open('docs/plant/plant.yaml')); print('ok')"
+
+  # ── Every deployable builds as a container ────────────────────────────────
+  containers:
+    name: Container ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    needs: [dotnet, web, python]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # port/path: what the smoke test calls; an empty path means "stays running" (no HTTP server).
+          - { name: platform-api,  context: ., file: src/platform-api/Dockerfile, port: 8080, path: /health/live }
+          - { name: ingest-worker, context: ., file: src/ingest-worker/Dockerfile, port: 0, path: "" }
+          - { name: ml-service,    context: src/ml-service, file: src/ml-service/Dockerfile, port: 8000, path: /health/live }
+          - { name: simulator,     context: ., file: src/simulator/Dockerfile, port: 8000, path: /health/live }
+          - { name: web,           context: src/web, file: src/web/Dockerfile, port: 8080, path: / }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          load: true
+          tags: smartfactory/${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      # Why: an image that builds can still fail to start (e.g. a base-image bump that no longer matches the
+      # interpreter the build stage installed into). Start it and prove it is alive before calling it green.
+      - name: Smoke test (container starts and answers)
+        env:
+          IMAGE: smartfactory/${{ matrix.name }}:ci
+          PORT: ${{ matrix.port }}
+          HEALTH_PATH: ${{ matrix.path }}
+        run: |
+          set -euo pipefail
+          if [ -n "$HEALTH_PATH" ]; then
+            docker run -d --name smoke -p 18000:"$PORT" "$IMAGE"
+            for i in $(seq 1 30); do
+              if curl -fsS -o /dev/null "http://localhost:18000$HEALTH_PATH"; then
+                echo "healthy after ${i}s"
+                curl -sS -D - -o /dev/null "http://localhost:18000$HEALTH_PATH" | grep -i '^x-smartfactory-data' || true
+                exit 0
+              fi
+              if [ "$(docker inspect -f '{{.State.Running}}' smoke)" != "true" ]; then break; fi
+              sleep 1
+            done
+          else
+            docker run -d --name smoke "$IMAGE"
+            sleep 10
+            if [ "$(docker inspect -f '{{.State.Running}}' smoke)" = "true" ]; then echo "still running after 10s"; exit 0; fi
+          fi
+          echo "::error::$IMAGE did not become healthy"
+          docker logs smoke || true
+          exit 1
+
+  # ── Gate G1: the whole stack, end to end ──────────────────────────────────
+  # docker compose up → Keycloak login → asset list, exactly as a developer would run it. The browser half signs in
+  # through Keycloak's real login page (PKCE) in Chromium and keeps a screenshot as a build artefact. Since week 3 the
+  # same stack also runs a technician's whole job on a 360 px phone viewport.
+  gate-g1:
+    name: Gate G1 (compose end-to-end)
+    runs-on: ubuntu-latest
+    needs: [dotnet, web]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Local .env with throw-away CI passwords
+        run: |
+          sed "s/replace-me-local-only/ci-$(openssl rand -hex 12)/" .env.example > .env
+          echo "::add-mask::$(grep '^DEV_USER_PASSWORD=' .env | cut -d= -f2-)"
+      - name: Start the G1 services
+        run: |
+          docker compose up -d --build --wait --wait-timeout 420 postgres redis keycloak platform-api web
+          docker compose run --rm keycloak-seed
+      - name: API and web check (scripts/g1-check.sh)
+        run: scripts/g1-check.sh
+      - name: Install Playwright (outside the repository)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Browser login and asset explorer (scripts/g1-browser-check.cjs)
+        run: |
+          export DEV_USER_PASSWORD="$(grep '^DEV_USER_PASSWORD=' .env | cut -d= -f2-)"
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" G1_SCREENSHOT=g1-asset-explorer.png node scripts/g1-browser-check.cjs
+      - name: Technician page at 360 px (scripts/technician-360-check.cjs)
+        run: |
+          export DEV_USER_PASSWORD="$(grep '^DEV_USER_PASSWORD=' .env | cut -d= -f2-)"
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" SCREENSHOT_PREFIX=technician-360 node scripts/technician-360-check.cjs
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshots
+          path: |
+            g1-asset-explorer.png
+            technician-360-*.png
+          if-no-files-found: ignore
+      - name: Service logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200 platform-api web keycloak keycloak-seed postgres
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v

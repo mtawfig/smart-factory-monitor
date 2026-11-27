@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="AwesomeAssertions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../SmartFactory.Ingest.Worker/SmartFactory.Ingest.Worker.csproj" />
+  </ItemGroup>
+</Project>

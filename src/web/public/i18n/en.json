@@ -1,0 +1,144 @@
+{
+  "app": {
+    "title": "SmartFactory AI",
+    "tagline": "Industrial predictive maintenance — advisory only",
+    "syntheticBanner": "Synthetic data. This demo runs on a simulated plant. The system is advisory only and never controls equipment."
+  },
+  "nav": {
+    "home": "Home",
+    "assets": "Assets",
+    "maintenance": "Maintenance Hub",
+    "risk": "Risk Center",
+    "comingSoon": "Coming in week {{week}}",
+    "myWork": "My work",
+    "menu": "Open navigation"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {{name}}",
+    "tenant": "Tenant",
+    "roles": "Roles",
+    "noRoles": "No roles assigned",
+    "loginTitle": "Sign in to continue",
+    "loginBody": "Use one of the seeded personas (manager, planner, technician, mlengineer, admin-sf) with the local development password."
+  },
+  "home": {
+    "title": "Welcome, {{name}}",
+    "whoAmI": "Who am I (from the Platform API)",
+    "apiUnavailable": "The Platform API is not reachable. Start it with: dotnet run --project src/platform-api/SmartFactory.Platform.Api",
+    "subject": "Subject",
+    "username": "Username",
+    "tokenClaims": "Token claims (from Keycloak)",
+    "expiresAt": "Access token expires"
+  },
+  "assets": {
+    "title": "Assets",
+    "syntheticTag": "Synthetic data",
+    "loadError": "The asset registry could not be loaded. Check that the Platform API is running.",
+    "notFound": "Asset not found.",
+    "empty": "No assets match these filters.",
+    "backToList": "All assets",
+    "ratedPower": "Rated power",
+    "description": "Description",
+    "sensors": "Sensor mappings",
+    "sensorsHint": "Each sensor is read from the simulator's MQTT topic shown. The platform only reads these topics; it never writes to equipment.",
+    "noSensors": "No sensors mapped yet.",
+    "filter": {
+      "line": "Line",
+      "allLines": "All lines",
+      "criticality": "Criticality",
+      "any": "Any",
+      "search": "Search code or name",
+      "clear": "Clear filters"
+    },
+    "col": {
+      "code": "Code",
+      "name": "Name",
+      "class": "Class",
+      "line": "Line",
+      "criticality": "Criticality",
+      "status": "Status",
+      "sensors": "Sensors",
+      "metric": "Metric",
+      "unit": "Unit",
+      "interval": "Interval",
+      "nominal": "Nominal band",
+      "topic": "MQTT topic"
+    },
+    "criticality": {
+      "High": "High",
+      "Medium": "Medium",
+      "Low": "Low"
+    },
+    "status": {
+      "InService": "In service",
+      "OutOfService": "Out of service",
+      "Decommissioned": "Decommissioned"
+    }
+  },
+  "work": {
+    "myWork": "My work",
+    "syntheticTag": "Synthetic data",
+    "loadError": "Your work could not be loaded. Check that the Platform API is running.",
+    "notFound": "Work order not found.",
+    "noOpenWork": "Nothing assigned to you right now.",
+    "recentlyFinished": "Recently finished",
+    "backToList": "My work",
+    "revision": "Revision {{n}}",
+    "due": "due {{date}}",
+    "checklist": "Checklist",
+    "noChecklist": "No checklist for this job.",
+    "findings": "Findings",
+    "noFindings": "No findings recorded yet.",
+    "addPhoto": "Add photo or PDF",
+    "conditionLabel": "Condition",
+    "notes": "What did you find?",
+    "addFinding": "Record finding",
+    "history": "History",
+    "holdReason": "Why is the work on hold?",
+    "cancel": "Cancel",
+    "status": {
+      "Requested": "Requested",
+      "Approved": "Approved",
+      "Scheduled": "Scheduled",
+      "InProgress": "In progress",
+      "Completed": "Completed",
+      "Closed": "Closed",
+      "Rejected": "Rejected",
+      "OnHold": "On hold",
+      "Cancelled": "Cancelled"
+    },
+    "priority": {
+      "Low": "Low",
+      "Medium": "Medium",
+      "High": "High",
+      "Urgent": "Urgent"
+    },
+    "action": {
+      "Start": "Start work",
+      "Hold": "Put on hold",
+      "Resume": "Resume",
+      "Complete": "Complete work"
+    },
+    "outcome": {
+      "Pending": "Not done yet",
+      "Done": "Done",
+      "NotApplicable": "N/A",
+      "Failed": "Failed"
+    },
+    "condition": {
+      "Good": "Good",
+      "Worn": "Worn",
+      "Degraded": "Degraded",
+      "Failed": "Failed"
+    },
+    "errors": {
+      "stale": "Someone else changed this work order. It has been reloaded; check it and try again.",
+      "tooLarge": "That file is larger than 5 MB.",
+      "fileType": "Only JPEG, PNG or PDF files are accepted.",
+      "download": "The attachment could not be downloaded.",
+      "generic": "Something went wrong. Try again."
+    }
+  }
+}

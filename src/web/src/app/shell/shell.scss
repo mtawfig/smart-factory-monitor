@@ -1,0 +1,68 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.toolbar {
+  gap: 0.75rem;
+
+  .brand {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tagline {
+    font-size: 0.85rem;
+    opacity: 0.8;
+
+    @media (max-width: 720px) {
+      display: none;
+    }
+  }
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+
+  // Why: on a phone the name would push the menu off screen; the icon stays, the name is still read by screen readers.
+  .user-name {
+    @media (max-width: 720px) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+  }
+}
+
+.menu-meta {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-width: 320px;
+}
+
+.container {
+  flex: 1 1 auto;
+}
+
+.sidenav {
+  width: 240px;
+}
+
+.content {
+  padding: 1.5rem;
+
+  // Why: on a 360 px phone every pixel of padding is taken from the content.
+  @media (max-width: 720px) {
+    padding: 0.75rem;
+  }
+}
+
+.active {
+  background: var(--mat-sys-secondary-container);
+}

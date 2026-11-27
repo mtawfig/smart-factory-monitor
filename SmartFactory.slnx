@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/building-blocks/">
+    <Project Path="src/building-blocks/SmartFactory.BuildingBlocks/SmartFactory.BuildingBlocks.csproj" />
+  </Folder>
+  <Folder Name="/src/ingest-worker/">
+    <Project Path="src/ingest-worker/SmartFactory.Ingest.Worker/SmartFactory.Ingest.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/ingest-worker/tests/">
+    <Project Path="src/ingest-worker/tests/SmartFactory.Ingest.Worker.Tests/SmartFactory.Ingest.Worker.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/platform-api/">
+    <Project Path="src/platform-api/SmartFactory.Platform.Api/SmartFactory.Platform.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/platform-api/Modules/">
+    <Project Path="src/platform-api/Modules/SmartFactory.Modules.Assets/SmartFactory.Modules.Assets.csproj" />
+    <Project Path="src/platform-api/Modules/SmartFactory.Modules.Audit/SmartFactory.Modules.Audit.csproj" />
+    <Project Path="src/platform-api/Modules/SmartFactory.Modules.Inventory/SmartFactory.Modules.Inventory.csproj" />
+    <Project Path="src/platform-api/Modules/SmartFactory.Modules.Maintenance/SmartFactory.Modules.Maintenance.csproj" />
+  </Folder>
+  <Folder Name="/src/platform-api/tests/">
+    <Project Path="src/platform-api/tests/SmartFactory.Platform.Api.Tests/SmartFactory.Platform.Api.Tests.csproj" />
+    <Project Path="src/platform-api/tests/SmartFactory.Platform.ArchitectureTests/SmartFactory.Platform.ArchitectureTests.csproj" />
+  </Folder>
+</Solution>

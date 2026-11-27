@@ -1,0 +1,73 @@
+# Dependabot keeps every manifest current and opens one grouped PR per ecosystem per week.
+# Why weekly and grouped: a solo developer reviews one PR per toolchain, not thirty.
+# Why the ignore rules: runtimes and frameworks whose version is fixed by an ADR (ADR-010 LTS-only, ADR-011
+# Angular 22 / Node 22) change only through a new ADR, never through an automatic bump. Python image tags such as
+# 3.12-slim-bookworm look like semver minors to Dependabot, so minor bumps of python are ignored as well.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      dotnet: { patterns: ["*"] }
+    commit-message: { prefix: "chore(deps)" }
+
+  - package-ecosystem: npm
+    directory: /src/web
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      - dependency-name: "@angular/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@angular-eslint/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "angular-eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "angular-oauth2-oidc"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      angular: { patterns: ["@angular/*", "angular-*", "@angular-eslint/*"] }
+      web-tooling: { patterns: ["*"], exclude-patterns: ["@angular/*", "angular-*", "@angular-eslint/*"] }
+    commit-message: { prefix: "chore(deps)" }
+
+  - package-ecosystem: uv
+    directories: ["/src/ml-service", "/src/simulator"]
+    schedule: { interval: weekly, day: monday }
+    groups:
+      python: { patterns: ["*"] }
+    commit-message: { prefix: "chore(deps)" }
+
+  - package-ecosystem: docker
+    directories:
+      - /src/platform-api
+      - /src/ingest-worker
+      - /src/ml-service
+      - /src/simulator
+      - /src/web
+      - /infra/compose/mlflow
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "ghcr.io/astral-sh/uv"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
+    commit-message: { prefix: "chore(deps)" }
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: "chore(compose)" }
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions: { patterns: ["*"] }
+    commit-message: { prefix: "chore(ci)" }

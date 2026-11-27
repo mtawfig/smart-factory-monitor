@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Platform API host (ADR-002): composes the four modules, owns cross-cutting concerns only. -->
+  <PropertyGroup>
+    <UserSecretsId>smartfactory-platform-api</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../building-blocks/SmartFactory.BuildingBlocks/SmartFactory.BuildingBlocks.csproj" />
+    <ProjectReference Include="../Modules/SmartFactory.Modules.Assets/SmartFactory.Modules.Assets.csproj" />
+    <ProjectReference Include="../Modules/SmartFactory.Modules.Maintenance/SmartFactory.Modules.Maintenance.csproj" />
+    <ProjectReference Include="../Modules/SmartFactory.Modules.Inventory/SmartFactory.Modules.Inventory.csproj" />
+    <ProjectReference Include="../Modules/SmartFactory.Modules.Audit/SmartFactory.Modules.Audit.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartFactory.Platform.Api.Tests" />
+  </ItemGroup>
+</Project>

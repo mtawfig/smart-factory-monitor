@@ -1,0 +1,59 @@
+<header class="page-header">
+  <h1>{{ 'work.myWork' | transloco }}</h1>
+  <span class="synthetic-tag" data-testid="synthetic-tag">
+    <mat-icon aria-hidden="true">science</mat-icon>{{ 'work.syntheticTag' | transloco }}
+  </span>
+</header>
+
+@if (list.isLoading()) {
+  <mat-progress-bar mode="indeterminate" />
+}
+
+@if (list.error()) {
+  <p class="error" role="alert" data-testid="work-error">{{ 'work.loadError' | transloco }}</p>
+} @else {
+  <ul class="cards" data-testid="open-work">
+    @for (w of open(); track w.id) {
+      <li>
+        <a class="card" [routerLink]="['/my-work', w.id]" data-testid="work-card">
+          <span class="card-top">
+            <span class="code">{{ w.assetCode }}</span>
+            <span class="status" [attr.data-status]="w.status">{{
+              'work.status.' + w.status | transloco
+            }}</span>
+          </span>
+          <span class="card-title">{{ w.title }}</span>
+          <span class="card-meta">
+            <mat-icon aria-hidden="true">event</mat-icon>{{ w.scheduledFor ?? '—' }}
+            <span class="priority" [attr.data-priority]="w.priority">{{
+              'work.priority.' + w.priority | transloco
+            }}</span>
+          </span>
+        </a>
+      </li>
+    } @empty {
+      @if (!list.isLoading()) {
+        <li class="empty" data-testid="no-work">{{ 'work.noOpenWork' | transloco }}</li>
+      }
+    }
+  </ul>
+
+  @if (done().length > 0) {
+    <h2>{{ 'work.recentlyFinished' | transloco }}</h2>
+    <ul class="cards compact">
+      @for (w of done(); track w.id) {
+        <li>
+          <a class="card" [routerLink]="['/my-work', w.id]">
+            <span class="card-top">
+              <span class="code">{{ w.assetCode }}</span>
+              <span class="status" [attr.data-status]="w.status">{{
+                'work.status.' + w.status | transloco
+              }}</span>
+            </span>
+            <span class="card-title">{{ w.title }}</span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+}

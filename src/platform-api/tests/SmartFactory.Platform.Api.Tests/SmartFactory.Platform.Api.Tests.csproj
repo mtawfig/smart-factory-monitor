@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../SmartFactory.Platform.Api/SmartFactory.Platform.Api.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Assets/SmartFactory.Modules.Assets.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Audit/SmartFactory.Modules.Audit.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Maintenance/SmartFactory.Modules.Maintenance.csproj" />
+  </ItemGroup>
+</Project>

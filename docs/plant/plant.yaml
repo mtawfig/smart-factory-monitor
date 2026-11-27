@@ -1,0 +1,279 @@
+# SmartFactory AI — simulated plant specification
+# ---------------------------------------------------------------------------
+# THIS PLANT IS FICTIONAL. ALL DATA PRODUCED FROM IT IS SYNTHETIC.
+# The simulator (src/simulator) reads this file; the ML service and the
+# platform API seed assets and sensor mappings from it. Nothing here is
+# connected to real equipment, and the platform never writes to equipment.
+#
+# Conventions
+#   - Units follow SI unless stated (bar, rpm, L/min, mm/s RMS velocity).
+#   - `interval_s` is the publish period of each sensor at 1x time compression.
+#   - `nominal` is the healthy operating band at steady state; the simulator
+#     adds shift-dependent load, slow drift and sensor noise around it.
+#   - Topic pattern (ADR-004): plant/{tenant}/{plant}/{line}/{asset}/{metric}
+# ---------------------------------------------------------------------------
+
+spec_version: 1
+synthetic: true
+seed: 20261101          # fixed seed; change only with a documented reason
+
+tenant:
+  id: tnt-alsafa
+  name: Al Safa Industrial (fictional)
+
+plant:
+  id: plant-01
+  name: Al Safa Industrial — Plant 01
+  timezone: Asia/Dubai
+  shifts:
+    - { id: A, start: "06:00", end: "14:00", load_factor: 1.00 }
+    - { id: B, start: "14:00", end: "22:00", load_factor: 0.90 }
+    # 22:00–06:00: plant idle; machines run at idle_load_factor
+  idle_load_factor: 0.15
+
+# Throughput profiles (readings/day for the whole plant)
+profiles:
+  full:
+    description: All sensors at their nominal interval_s (~560k readings/day)
+    fixed_interval_s: null
+  throttled:
+    description: Cloud-demo profile — one reading per metric every 30 s (~90k readings/day)
+    fixed_interval_s: 30
+
+time_compression:
+  min: 1
+  max: 120
+  default: 1
+
+# ---------------------------------------------------------------------------
+# Lines and assets
+# criticality (High / Medium / Low) follows blueprint p.8 and drives maintenance priority.
+# ---------------------------------------------------------------------------
+lines:
+  - id: line-a
+    name: Line A — Packaging
+    assets:
+
+      - id: MTR-042
+        name: Filler drive motor
+        asset_class: MOTOR
+        criticality: High
+        description: 15 kW induction motor driving the bottle filler
+        rated_power_kw: 15
+        sensors:
+          - { metric: vibration_rms, unit: "mm/s", interval_s: 5,  nominal: [1.0, 2.8] }
+          - { metric: bearing_temp,  unit: "°C",   interval_s: 5,  nominal: [45, 70] }
+          - { metric: current,       unit: "A",    interval_s: 5,  nominal: [22, 28] }
+          - { metric: speed,         unit: "rpm",  interval_s: 5,  nominal: [1470, 1490] }
+        applicable_faults: [BEARING, THERMAL, SENSOR_FAULT]
+
+      - id: CVR-012
+        name: Belt conveyor
+        asset_class: CONVEYOR
+        criticality: Medium
+        description: Accumulation belt conveyor between filler and case packer
+        sensors:
+          - { metric: belt_speed,    unit: "m/s",  interval_s: 5,  nominal: [0.8, 1.2] }
+          - { metric: motor_current, unit: "A",    interval_s: 5,  nominal: [6, 9] }
+          - { metric: gearbox_temp,  unit: "°C",   interval_s: 5,  nominal: [40, 60] }
+        applicable_faults: [MECHANICAL, SENSOR_FAULT]
+
+      - id: CMP-007
+        name: Screw compressor
+        asset_class: COMPRESSOR
+        criticality: High
+        description: Oil-injected rotary screw compressor feeding plant air
+        sensors:
+          - { metric: discharge_pressure, unit: "bar",  interval_s: 5, nominal: [7.0, 8.0] }
+          - { metric: oil_temp,           unit: "°C",   interval_s: 5, nominal: [60, 85] }
+          - { metric: vibration_rms,      unit: "mm/s", interval_s: 5, nominal: [1.5, 3.5] }
+          - { metric: run_hours,          unit: "h",    interval_s: 5, nominal: null, kind: counter }
+        applicable_faults: [THERMAL, CLOGGING, SENSOR_FAULT]
+
+      - id: FAN-034
+        name: Extraction fan
+        asset_class: FAN
+        criticality: Low
+        description: Centrifugal extraction fan for the packaging hall
+        sensors:
+          - { metric: vibration_rms, unit: "mm/s", interval_s: 10, nominal: [1.0, 3.0] }
+          - { metric: airflow,       unit: "m³/h", interval_s: 10, nominal: [4000, 5500] }
+          - { metric: current,       unit: "A",    interval_s: 10, nominal: [8, 11] }
+        applicable_faults: [BEARING, SENSOR_FAULT]
+
+  - id: line-b
+    name: Line B — Machining
+    assets:
+
+      - id: CNC-018
+        name: 3-axis CNC mill
+        asset_class: CNC
+        criticality: High
+        description: Vertical 3-axis machining centre
+        sensors:
+          - { metric: spindle_load, unit: "%",      interval_s: 2, nominal: [30, 75] }
+          - { metric: spindle_temp, unit: "°C",     interval_s: 2, nominal: [35, 55] }
+          - { metric: vibration_rms, unit: "mm/s",  interval_s: 2, nominal: [0.8, 2.5] }
+          - { metric: tool_wear,    unit: "min",    interval_s: 2, nominal: [0, 200], kind: counter_reset_on_tool_change }
+          - { metric: feed_rate,    unit: "mm/min", interval_s: 2, nominal: null, kind: setpoint_driven }
+        applicable_faults: [TOOL_WEAR, SENSOR_FAULT]
+
+      - id: PMP-211
+        name: Coolant pump
+        asset_class: PUMP
+        criticality: Medium
+        description: Centrifugal coolant circulation pump for Line B
+        sensors:
+          - { metric: flow,               unit: "L/min", interval_s: 5, nominal: [80, 120] }
+          - { metric: suction_pressure,   unit: "bar",   interval_s: 5, nominal: [0.2, 0.6] }
+          - { metric: discharge_pressure, unit: "bar",   interval_s: 5, nominal: [3.0, 4.0] }
+          - { metric: vibration_rms,      unit: "mm/s",  interval_s: 5, nominal: [1.0, 3.0] }
+          - { metric: temp,               unit: "°C",    interval_s: 5, nominal: null }
+        applicable_faults: [BEARING, CAVITATION, SENSOR_FAULT]
+
+      - id: PRS-105
+        name: Hydraulic press
+        asset_class: PRESS
+        criticality: High
+        description: Hydraulic forming press, cyclic operation (~8 s per cycle)
+        sampling: per_cycle
+        sensors:
+          - { metric: hydraulic_pressure, unit: "bar", interval_s: 8, nominal: [180, 210] }
+          - { metric: oil_temp,           unit: "°C",  interval_s: 8, nominal: [40, 65] }
+          - { metric: cycle_time,         unit: "s",   interval_s: 8, nominal: [7.5, 9.0] }
+          - { metric: cycles,             unit: "count", interval_s: 8, nominal: null, kind: counter }
+        applicable_faults: [HYDRAULIC, SENSOR_FAULT]
+
+      - id: CHL-003
+        name: Process chiller
+        asset_class: CHILLER
+        criticality: Medium
+        description: Water chiller supplying Line B coolant and spindle cooling
+        sensors:
+          - { metric: supply_temp,          unit: "°C",  interval_s: 10, nominal: [6, 9] }
+          - { metric: return_temp,          unit: "°C",  interval_s: 10, nominal: [11, 15] }
+          - { metric: compressor_current,   unit: "A",   interval_s: 10, nominal: [14, 20] }
+          - { metric: refrigerant_pressure, unit: "bar", interval_s: 10, nominal: [8, 12] }
+        applicable_faults: [THERMAL, CLOGGING, SENSOR_FAULT]
+
+# Summary: 8 assets, 32 metrics as listed (blueprint v2.0 text says 31; PMP-211 `temp`
+# has no nominal band in the blueprint and is the likely uncounted one — owner to confirm).
+
+# ---------------------------------------------------------------------------
+# Health model
+# ---------------------------------------------------------------------------
+health_model:
+  description: >
+    Each asset carries a health index h(t) in [0, 1] (1 = healthy). An active
+    fault drives h(t) down along its hazard shape; metric deviations are a
+    function of (1 - h). Ground-truth labels are written to an offline table
+    only and are never visible to the online scoring path.
+  hazard_shapes: [linear, exponential, weibull]
+  ground_truth:
+    table: ground_truth
+    storage: offline dataset store (blob/parquet gold layer), never the platform database
+    online_access: forbidden
+
+# ---------------------------------------------------------------------------
+# Fault library
+# ---------------------------------------------------------------------------
+faults:
+
+  - id: BEARING
+    name: Bearing wear
+    label: failure
+    applies_to: [MTR-042, FAN-034, PMP-211]
+    hazard_shape: exponential
+    duration_h: [6, 48]
+    signature:
+      vibration_rms: { from_nominal: true, to: 7.0, note: "rises from ~1.0 to 7+ mm/s" }
+      bearing_temp:  { drift: "+5..+15 °C in late stage", optional: true }
+
+  - id: THERMAL
+    name: Overheating
+    label: failure
+    applies_to: [MTR-042, CMP-007, CHL-003]
+    hazard_shape: linear
+    duration_h: [1, 6]
+    signature:
+      temperature_metrics: { drift: "linear rise beyond nominal upper band" }
+      current_metrics:     { drift: "+5..+10 %" }
+
+  - id: CAVITATION
+    name: Cavitation
+    label: failure
+    applies_to: [PMP-211]
+    hazard_shape: weibull
+    duration_h: [2, 12]
+    signature:
+      suction_pressure: { drift: "drop towards 0.0 bar" }
+      flow:             { oscillation_pct: 15 }
+      vibration_rms:    { drift: "broadband increase" }
+
+  - id: MECHANICAL
+    name: Belt slip
+    label: failure
+    applies_to: [CVR-012]
+    hazard_shape: linear
+    duration_h: [2, 24]
+    signature:
+      belt_speed:    { drift: "intermittent drops of 10..30 % under load" }
+      motor_current: { drift: "spikes coinciding with speed drops" }
+      gearbox_temp:  { drift: "slow rise" }
+
+  - id: TOOL_WEAR
+    name: Tool wear
+    label: failure
+    applies_to: [CNC-018]
+    hazard_shape: linear
+    duration_h: [3, 4]      # reaches threshold at tool_wear > 180 min
+    signature:
+      spindle_load: { drift: "+20..+40 %" }
+      tool_wear:    { threshold: 180 }
+      vibration_rms: { drift: "mild increase" }
+
+  - id: CLOGGING
+    name: Filter / cooler clogging
+    label: failure
+    applies_to: [CMP-007, CHL-003]
+    hazard_shape: linear
+    duration_h: [48, 240]   # slow drift over days
+    signature:
+      oil_temp / supply_temp:  { drift: "slow upward" }
+      discharge_pressure / refrigerant_pressure: { drift: "slow downward or upward depending on asset" }
+
+  - id: HYDRAULIC
+    name: Hydraulic leak
+    label: failure
+    applies_to: [PRS-105]
+    hazard_shape: exponential
+    duration_h: [4, 36]
+    signature:
+      hydraulic_pressure: { drift: "falling peak pressure" }
+      cycle_time:         { drift: "lengthening" }
+      oil_temp:           { drift: "rising" }
+
+  - id: SENSOR_FAULT
+    name: Sensor fault
+    label: quality_flag      # NOT a failure; sets a data-quality flag
+    applies_to: all
+    modes: [dropout, stuck_value, spike, out_of_range, clock_skew]
+    duration_h: [0.05, 2]
+
+# ---------------------------------------------------------------------------
+# Scenario presets (selected through the simulator control API)
+# ---------------------------------------------------------------------------
+scenarios:
+  - id: healthy-day
+    description: 24 h of healthy operation across both shifts; no faults.
+  - id: bearing-wear-mtr042
+    description: BEARING fault on MTR-042, exponential, 12 h to failure.
+  - id: cavitation-pmp211
+    description: CAVITATION on PMP-211, Weibull, 6 h.
+  - id: tool-wear-cnc018
+    description: TOOL_WEAR on CNC-018 reaching 180 min threshold.
+  - id: sensor-dropout
+    description: SENSOR_FAULT dropout and stuck values on several assets; no failure.
+  - id: demo-5-minutes
+    description: Time-compressed (120x) bearing wear on MTR-042 for live demos.
+    time_compression: 120

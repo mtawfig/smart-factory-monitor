@@ -1,0 +1,74 @@
+<h1>{{ 'home.title' | transloco: { name: auth.displayName() } }}</h1>
+
+<div class="grid">
+  <mat-card appearance="outlined" data-testid="api-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>cloud_done</mat-icon>
+      <mat-card-title>{{ 'home.whoAmI' | transloco }}</mat-card-title>
+      <mat-card-subtitle>GET /api/me</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      @switch (me().kind) {
+        @case ('loading') {
+          <p>…</p>
+        }
+        @case ('error') {
+          <p class="error">{{ 'home.apiUnavailable' | transloco }}</p>
+        }
+        @case ('ok') {
+          @if (me(); as m) {
+            @if (m.kind === 'ok') {
+              <mat-list>
+                <mat-list-item>
+                  <span matListItemTitle>{{ 'home.subject' | transloco }}</span>
+                  <span matListItemLine>{{ m.subject }}</span>
+                </mat-list-item>
+                <mat-list-item>
+                  <span matListItemTitle>{{ 'home.username' | transloco }}</span>
+                  <span matListItemLine>{{ m.username }}</span>
+                </mat-list-item>
+                <mat-list-item>
+                  <span matListItemTitle>{{ 'auth.tenant' | transloco }}</span>
+                  <span matListItemLine>{{ m.tenantId }}</span>
+                </mat-list-item>
+              </mat-list>
+              <mat-chip-set aria-label="roles">
+                @for (role of m.roles; track role) {
+                  <mat-chip>{{ role }}</mat-chip>
+                } @empty {
+                  <mat-chip disabled>{{ 'auth.noRoles' | transloco }}</mat-chip>
+                }
+              </mat-chip-set>
+            }
+          }
+        }
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" data-testid="token-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>key</mat-icon>
+      <mat-card-title>{{ 'home.tokenClaims' | transloco }}</mat-card-title>
+      <mat-card-subtitle
+        >{{ 'home.expiresAt' | transloco }}:
+        {{ expiresAt?.toLocaleTimeString() ?? '—' }}</mat-card-subtitle
+      >
+    </mat-card-header>
+    <mat-card-content>
+      <mat-list>
+        <mat-list-item>
+          <span matListItemTitle>{{ 'auth.tenant' | transloco }}</span>
+          <span matListItemLine>{{ auth.tenantId() ?? '—' }}</span>
+        </mat-list-item>
+      </mat-list>
+      <mat-chip-set aria-label="token roles">
+        @for (role of auth.roles(); track role) {
+          <mat-chip>{{ role }}</mat-chip>
+        } @empty {
+          <mat-chip disabled>{{ 'auth.noRoles' | transloco }}</mat-chip>
+        }
+      </mat-chip-set>
+    </mat-card-content>
+  </mat-card>
+</div>

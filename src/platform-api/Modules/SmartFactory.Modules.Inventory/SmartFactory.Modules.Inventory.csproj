@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Module of the Platform API modular monolith (ADR-002). Owns the "inventory" schema (ADR-007).
+       May reference BuildingBlocks only; never another module or the host. Enforced by architecture tests. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../building-blocks/SmartFactory.BuildingBlocks/SmartFactory.BuildingBlocks.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,84 @@
+<sf-synthetic-banner />
+
+<mat-toolbar color="primary" class="toolbar">
+  @if (narrow() && auth.isAuthenticated()) {
+    <button
+      mat-icon-button
+      type="button"
+      (click)="nav.toggle()"
+      [attr.aria-label]="'nav.menu' | transloco"
+      data-testid="nav-toggle"
+    >
+      <mat-icon>menu</mat-icon>
+    </button>
+  }
+  <span class="brand">{{ 'app.title' | transloco }}</span>
+  <span class="tagline">{{ 'app.tagline' | transloco }}</span>
+  <span class="spacer"></span>
+
+  @if (auth.isAuthenticated()) {
+    <button mat-button [matMenuTriggerFor]="userMenu" data-testid="user-menu">
+      <mat-icon>account_circle</mat-icon>
+      <span class="user-name">{{ auth.displayName() }}</span>
+    </button>
+    <mat-menu #userMenu="matMenu">
+      <div class="menu-meta">
+        <div>
+          <strong>{{ 'auth.tenant' | transloco }}:</strong> {{ auth.tenantId() ?? '—' }}
+        </div>
+        <div>
+          <strong>{{ 'auth.roles' | transloco }}:</strong>
+          {{ auth.roles().length ? auth.roles().join(', ') : ('auth.noRoles' | transloco) }}
+        </div>
+      </div>
+      <button mat-menu-item (click)="auth.logout()" data-testid="sign-out">
+        <mat-icon>logout</mat-icon>
+        <span>{{ 'auth.signOut' | transloco }}</span>
+      </button>
+    </mat-menu>
+  } @else {
+    <button mat-flat-button (click)="auth.login()" data-testid="sign-in">
+      <mat-icon>login</mat-icon>
+      {{ 'auth.signIn' | transloco }}
+    </button>
+  }
+</mat-toolbar>
+
+<mat-sidenav-container class="container">
+  <mat-sidenav
+    #nav
+    [mode]="narrow() ? 'over' : 'side'"
+    [opened]="auth.isAuthenticated() && !narrow()"
+    class="sidenav"
+  >
+    <mat-nav-list>
+      @for (item of visibleNav(); track item.key) {
+        @if (item.route) {
+          <a
+            mat-list-item
+            [routerLink]="item.route"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: item.route === '/' }"
+            (click)="narrow() && nav.close()"
+          >
+            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+            <span matListItemTitle>{{ item.key | transloco }}</span>
+          </a>
+        } @else {
+          <a
+            mat-list-item
+            disabled
+            [matTooltip]="'nav.comingSoon' | transloco: { week: item.week }"
+          >
+            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+            <span matListItemTitle>{{ item.key | transloco }}</span>
+          </a>
+        }
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="content">
+    <router-outlet />
+  </mat-sidenav-content>
+</mat-sidenav-container>

@@ -1,0 +1,289 @@
+# SmartFactory AI — local development stack
+# ---------------------------------------------------------------------------
+# One command gives you the platform: infrastructure, Platform API and web app.
+#   cp .env.example .env     (edit the placeholder passwords; .env is git-ignored)
+#   docker compose up -d
+#   docker compose ps        (wait until every service reports "healthy")
+#   open http://localhost:4200 and sign in as "planner" (DEV_USER_PASSWORD)
+#   scripts/g1-check.sh      (the Gate G1 end-to-end check, also run in CI)
+#
+# Nothing here is production configuration. Everything is synthetic.
+# Image versions are pinned to exact tags on purpose: Dependabot proposes bumps,
+# a human reviews them. Learning note: docs/learning/02-local-platform.md
+# ---------------------------------------------------------------------------
+
+name: smartfactory
+
+services:
+
+  # ── PostgreSQL 16 + TimescaleDB ─────────────────────────────────────────
+  # Why: one database instance, one schema per module (ADR-007). The Timescale
+  # image is plain PostgreSQL with the extension preloaded; init scripts create
+  # the extra databases Keycloak and MLflow need.
+  postgres:
+    image: timescale/timescaledb:2.31.0-pg16
+    container_name: sf-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: smartfactory
+      # Why: keeps the sort order deterministic across machines (tests depend on it).
+      POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/compose/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d smartfactory"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Redis ───────────────────────────────────────────────────────────────
+  # Why: cache only (last value per asset, dedup sets, rate limits). Losing it
+  # must never lose data, so no AOF and a small memory cap. noeviction (the
+  # default) is deliberate: evicting a dedup key would re-admit a duplicate.
+  redis:
+    image: redis:8.10.3-alpine
+    container_name: sf-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Eclipse Mosquitto (MQTT broker) ─────────────────────────────────────
+  # Why: the read-only OT boundary (ADR-004). The simulator publishes here,
+  # the ingest worker subscribes. Port 9001 is MQTT over WebSockets so a
+  # browser can watch raw telemetry during demos.
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    container_name: sf-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./infra/compose/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/broker/uptime' -C 1 -i healthcheck -W 3 >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
+  # ── Redpanda (Kafka API) ────────────────────────────────────────────────
+  # Why: Kafka-compatible broker in one process, no ZooKeeper (ADR-003).
+  # Two listeners: "internal" for containers (redpanda:9092) and "external"
+  # for tools on your laptop (localhost:19092). Same protocol as Event Hubs'
+  # Kafka endpoint in Azure, so application code does not change.
+  redpanda:
+    image: redpandadata/redpanda:v25.3.18
+    container_name: sf-redpanda
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - "19092:19092"   # Kafka API (external listener)
+      - "18081:18081"   # Schema registry
+      - "18082:18082"   # HTTP proxy
+      - "9644:9644"     # Admin API / metrics
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # Web UI for topics, consumer groups and messages. Not needed by the apps.
+  redpanda-console:
+    image: redpandadata/console:v3.13.1
+    container_name: sf-redpanda-console
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMAREGISTRY_ENABLED: "true"
+      SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Keycloak (OIDC identity provider) ───────────────────────────────────
+  # Why: ADR-008. start-dev is HTTP-only and permissive on purpose; the Azure
+  # deployment uses "start" with TLS. The realm (roles, clients, tenant_id
+  # claim mapper) is imported from a file that contains no users and no
+  # secrets; dev users are seeded by the keycloak-seed job below.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: sf-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?set KC_BOOTSTRAP_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD in .env}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HTTP_PORT: "8080"
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports:
+      - "8180:8080"   # Admin console and OIDC endpoints
+      - "9000:9000"   # Management: /health, /metrics
+    volumes:
+      - ./infra/compose/keycloak/realm-smartfactory.json:/opt/keycloak/data/import/realm-smartfactory.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Why: the Keycloak image ships no curl/wget; bash's /dev/tcp is the
+      # documented workaround for a readiness probe.
+      test:
+        - CMD-SHELL
+        - >
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+    restart: unless-stopped
+
+  # One-shot job: creates the five persona users for tenant tnt-alsafa.
+  # Passwords come from .env, never from the repository. Safe to re-run.
+  keycloak-seed:
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: sf-keycloak-seed
+    entrypoint: ["/bin/bash", "/seed/seed-dev-users.sh"]
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      DEV_USER_PASSWORD: ${DEV_USER_PASSWORD:?set DEV_USER_PASSWORD in .env}
+      DEV_TENANT_ID: tnt-alsafa
+    volumes:
+      - ./infra/compose/keycloak/seed-dev-users.sh:/seed/seed-dev-users.sh:ro
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    restart: "no"
+
+  # ── MLflow (tracking server + model registry) ───────────────────────────
+  # Why: ADR-005. Metadata in PostgreSQL (database "mlflow"), artefacts on a
+  # local volume (Blob Storage in Azure). The image is built locally because
+  # the upstream image has no PostgreSQL driver.
+  mlflow:
+    build:
+      context: ./infra/compose/mlflow
+    image: smartfactory/mlflow-local:3.17.2
+    container_name: sf-mlflow
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      - --artifacts-destination=/mlflow/artifacts
+      - --serve-artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-artifacts:/mlflow/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health', timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── Platform API (ASP.NET Core 10 modular monolith) ─────────────────────
+  # Why these settings: on start it applies the module migrations (assets,
+  # audit) and seeds the plant from docs/plant/plant.yaml for tenant
+  # tnt-alsafa; both are idempotent, so restarts are safe. It connects as the
+  # database owner but runs every query as the sf_app role, so row-level
+  # security applies (ADR-008). Tokens are issued for localhost:8180 (what
+  # the browser sees) while signing keys are fetched from keycloak:8080
+  # inside the network: hence Authority and MetadataAddress differ.
+  platform-api:
+    build:
+      context: .
+      dockerfile: src/platform-api/Dockerfile
+    image: smartfactory/platform-api:local
+    container_name: sf-platform-api
+    environment:
+      ConnectionStrings__Platform: Host=postgres;Port=5432;Database=smartfactory;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379,abortConnect=false
+      Database__MigrateOnStartup: "true"
+      Seed__Enabled: "true"
+      Seed__PlantSpecPath: /plant/plant.yaml
+      Authentication__Authority: http://localhost:8180/realms/smartfactory
+      Authentication__MetadataAddress: http://keycloak:8080/realms/smartfactory/.well-known/openid-configuration
+      Authentication__RequireHttpsMetadata: "false"
+      Cors__AllowedOrigins__0: http://localhost:4200
+    ports:
+      - "5080:8080"
+    volumes:
+      - ./docs/plant/plant.yaml:/plant/plant.yaml:ro
+      - attachments:/var/lib/smartfactory/attachments   # finding photos and PDFs (synthetic)
+    # Why redis too: /health/ready checks both, so the API is not "ready" without it.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Web (Angular, served by unprivileged nginx) ─────────────────────────
+  # Why the "compose" build: Angular bakes URLs in at build time; this build
+  # points at localhost:5080 and localhost:8180 like the dev server does.
+  web:
+    build:
+      context: ./src/web
+      args:
+        BUILD_CONFIGURATION: compose
+    image: smartfactory/web:local
+    container_name: sf-web
+    ports:
+      - "4200:8080"
+    depends_on:
+      platform-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  attachments:
+  postgres-data:
+  mosquitto-data:
+  redpanda-data:
+  mlflow-artifacts:

@@ -1,0 +1,99 @@
+<header class="page-header">
+  <h1>{{ 'assets.title' | transloco }}</h1>
+  <span class="synthetic-tag" data-testid="synthetic-tag">
+    <mat-icon aria-hidden="true">science</mat-icon>{{ 'assets.syntheticTag' | transloco }}
+  </span>
+</header>
+
+<form class="filters" [formGroup]="filterForm" role="search">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'assets.filter.line' | transloco }}</mat-label>
+    <mat-select formControlName="lineId" data-testid="filter-line">
+      <mat-option value="">{{ 'assets.filter.allLines' | transloco }}</mat-option>
+      @for (line of lines(); track line.id) {
+        <mat-option [value]="line.id">{{ line.name }} ({{ line.assetCount }})</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'assets.filter.criticality' | transloco }}</mat-label>
+    <mat-select formControlName="criticality" data-testid="filter-criticality">
+      <mat-option value="">{{ 'assets.filter.any' | transloco }}</mat-option>
+      @for (c of criticalities; track c) {
+        <mat-option [value]="c">{{ 'assets.criticality.' + c | transloco }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search">
+    <mat-label>{{ 'assets.filter.search' | transloco }}</mat-label>
+    <mat-icon matPrefix>search</mat-icon>
+    <input matInput formControlName="search" autocomplete="off" data-testid="filter-search" />
+  </mat-form-field>
+
+  @if (hasFilter()) {
+    <button type="button" class="link-button" (click)="clearFilters()">
+      {{ 'assets.filter.clear' | transloco }}
+    </button>
+  }
+</form>
+
+@if (assets.isLoading()) {
+  <mat-progress-bar mode="indeterminate" />
+}
+
+@if (assets.error()) {
+  <p class="error" role="alert" data-testid="assets-error">{{ 'assets.loadError' | transloco }}</p>
+} @else {
+  <div class="table-wrap">
+    <table mat-table [dataSource]="assets.value()" data-testid="asset-table">
+      <ng-container matColumnDef="code">
+        <th mat-header-cell *matHeaderCellDef>{{ 'assets.col.code' | transloco }}</th>
+        <td mat-cell *matCellDef="let a">
+          <a [routerLink]="['/assets', a.id]" class="code">{{ a.code }}</a>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>{{ 'assets.col.name' | transloco }}</th>
+        <td mat-cell *matCellDef="let a">{{ a.name }}</td>
+      </ng-container>
+      <ng-container matColumnDef="assetClass">
+        <th mat-header-cell *matHeaderCellDef>{{ 'assets.col.class' | transloco }}</th>
+        <td mat-cell *matCellDef="let a">{{ a.assetClass }}</td>
+      </ng-container>
+      <ng-container matColumnDef="line">
+        <th mat-header-cell *matHeaderCellDef>{{ 'assets.col.line' | transloco }}</th>
+        <td mat-cell *matCellDef="let a">{{ a.lineName }}</td>
+      </ng-container>
+      <ng-container matColumnDef="criticality">
+        <th mat-header-cell *matHeaderCellDef>{{ 'assets.col.criticality' | transloco }}</th>
+        <td mat-cell *matCellDef="let a">
+          <span class="criticality" [attr.data-level]="a.criticality">{{
+            'assets.criticality.' + a.criticality | transloco
+          }}</span>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>{{ 'assets.col.status' | transloco }}</th>
+        <td mat-cell *matCellDef="let a">{{ 'assets.status.' + a.status | transloco }}</td>
+      </ng-container>
+      <ng-container matColumnDef="sensorCount">
+        <th mat-header-cell *matHeaderCellDef class="num">
+          {{ 'assets.col.sensors' | transloco }}
+        </th>
+        <td mat-cell *matCellDef="let a" class="num">{{ a.sensorCount }}</td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="columns"></tr>
+      <tr mat-row *matRowDef="let row; columns: columns" data-testid="asset-row"></tr>
+      <tr class="mat-row" *matNoDataRow>
+        <td class="mat-cell empty" [attr.colspan]="columns.length">
+          @if (!assets.isLoading()) {
+            {{ 'assets.empty' | transloco }}
+          }
+        </td>
+      </tr>
+    </table>
+  </div>
+}

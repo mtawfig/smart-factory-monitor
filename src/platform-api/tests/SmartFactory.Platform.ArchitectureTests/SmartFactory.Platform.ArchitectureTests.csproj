@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Fitness functions (ADR-002): the build fails when a module boundary is crossed. -->
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../SmartFactory.Platform.Api/SmartFactory.Platform.Api.csproj" />
+    <ProjectReference Include="../../../building-blocks/SmartFactory.BuildingBlocks/SmartFactory.BuildingBlocks.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Assets/SmartFactory.Modules.Assets.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Maintenance/SmartFactory.Modules.Maintenance.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Inventory/SmartFactory.Modules.Inventory.csproj" />
+    <ProjectReference Include="../../Modules/SmartFactory.Modules.Audit/SmartFactory.Modules.Audit.csproj" />
+  </ItemGroup>
+</Project>

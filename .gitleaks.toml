@@ -1,0 +1,19 @@
+# gitleaks configuration: default rules plus allowlists for files that are placeholders by design.
+title = "SmartFactory AI"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders and documentation that look like secrets but are not"
+paths = [
+  '''\.env\.example$''',
+  '''docs/learning/.*\.md$''',
+  '''src/web/package-lock\.json$''',
+  '''src/.*/uv\.lock$''',
+]
+regexes = [
+  '''replace-me-local-only''',
+  '''ci-placeholder''',
+  '''REPLACE_AT_DEPLOY''',
+]
