@@ -64,7 +64,7 @@ services:
   # the ingest worker subscribes. Port 9001 is MQTT over WebSockets so a
   # browser can watch raw telemetry during demos.
   mosquitto:
-    image: eclipse-mosquitto:2.0.22
+    image: eclipse-mosquitto:2.0.23
     container_name: sf-mosquitto
     ports:
       - "1883:1883"
